@@ -13,8 +13,9 @@ import (
 
 const timeout = time.Second * 60
 
-func GetPortGroups(sess *session.Session, datacenter *object.Datacenter) ([]object.NetworkReference, error) {
+func GetPortGroups(sess *session.Session, datacenter *object.Datacenter) ([]*mo.DistributedVirtualPortgroup, error) {
 	var networks []object.NetworkReference
+	var portGroupManagedObjects []*mo.DistributedVirtualPortgroup
 	var err error
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
@@ -25,15 +26,20 @@ func GetPortGroups(sess *session.Session, datacenter *object.Datacenter) ([]obje
 	}
 
 	for _, n := range networks {
-		var pgMo mo.DistributedVirtualPortgroup
-		err = datacenter.Properties(ctx, n.Reference(), []string{"*"}, &pgMo)
-		if err != nil {
-			return nil, err
-		}
 
+		switch n.Reference().Type {
+		// We only care about dvPGs
+		case "DistributedVirtualPortgroup":
+			var pgMo mo.DistributedVirtualPortgroup
+			err = n.(object.DistributedVirtualPortgroup).Properties(ctx, n.Reference(), []string{"config"}, &pgMo)
+			if err != nil {
+				return nil, err
+			}
+			portGroupManagedObjects = append(portGroupManagedObjects, &pgMo)
+		}
 	}
 
-	return networks, nil
+	return portGroupManagedObjects, nil
 }
 func GetDatacenters(sess *session.Session) ([]*object.Datacenter, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)

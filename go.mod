@@ -1,11 +1,15 @@
 module github.com/openshift-splat-team/vsphere-capacity-manager-data
 
-go 1.21.7
+go 1.22.0
+
+toolchain go1.22.2
 
 replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
 
 require (
+	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240423213246-337f25f38aed
 	github.com/softlayer/softlayer-go v1.1.3
+	github.com/vmware/govmomi v0.34.2
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.3
 )
 
@@ -43,7 +47,6 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/softlayer/xmlrpc v0.0.0-20200409220501-5f089df7cb7e // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/vmware/govmomi v0.34.2 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
