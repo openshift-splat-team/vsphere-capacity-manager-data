@@ -3,6 +3,8 @@ package vsphere
 import (
 	"context"
 	"fmt"
+	"github.com/vmware/govmomi/view"
+	"github.com/vmware/govmomi/vim25/types"
 	"path"
 	"time"
 
@@ -12,6 +14,74 @@ import (
 )
 
 const timeout = time.Second * 60
+
+func (m *Metadata) FindVCenterVirtualMachine(server string) (*mo.VirtualMachine, error) {
+	sess, err := m.Session(context.TODO(), server)
+	if err != nil {
+		return nil, err
+	}
+
+	mgr := view.NewManager(sess.Client.Client)
+	kind := []string{"VirtualMachine"}
+
+	v, err := mgr.CreateContainerView(context.TODO(), sess.ServiceContent.RootFolder, kind, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var virtualMachines []mo.VirtualMachine
+	err = v.Retrieve(context.TODO(), kind, []string{"config", "guest", "network"}, &virtualMachines)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vm := range virtualMachines {
+		if vm.Guest.HostName == server {
+			return &vm, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (m *Metadata) GetPortGroupVlanFromMoRef(networks []types.ManagedObjectReference, server string) ([]int32, error) {
+	sess, err := m.Session(context.TODO(), server)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var dvpgs []mo.DistributedVirtualPortgroup
+	var vlanIds []int32
+
+	err = sess.Retrieve(context.TODO(), networks, []string{"config"}, &dvpgs)
+	if err != nil {
+		return nil, err
+	}
+	for _, pg := range dvpgs {
+		portSetting := pg.Config.DefaultPortConfig.(*types.VMwareDVSPortSetting)
+		vlanIds = append(vlanIds, portSetting.Vlan.(*types.VmwareDistributedVirtualSwitchVlanIdSpec).VlanId)
+	}
+	return vlanIds, nil
+}
+
+func (m *Metadata) GetHostnameUrlVpxd(server string) (*string, error) {
+	sess, err := m.Session(context.TODO(), server)
+	if err != nil {
+		return nil, err
+	}
+
+	optmgr := object.NewOptionManager(sess.Client.Client, *sess.ServiceContent.Setting)
+
+	baseOptionValue, err := optmgr.Query(context.TODO(), "config.vpxd.hostnameUrl")
+	if err != nil {
+		return nil, err
+	}
+
+	url := baseOptionValue[0].GetOptionValue().Value.(string)
+
+	return &url, nil
+}
 
 func GetPortGroups(sess *session.Session, datacenter *object.Datacenter) ([]*mo.DistributedVirtualPortgroup, error) {
 	var networks []object.NetworkReference
