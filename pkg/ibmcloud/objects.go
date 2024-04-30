@@ -21,16 +21,34 @@ type VCenterLocation struct {
 	IPAddress net.IP
 }
 
-func (m *Metadata) GetVlanSubnets(account string) ([]datatypes.Network_Vlan, error) {
+func (m *Metadata) GetVlanSubnets(account, datacenterName, podName string) (*[]datatypes.Network_Vlan, error) {
 	_, err := m.Session(context.TODO(), account)
 	if err != nil {
 		return nil, err
 	}
-	vlans, err := m.sessions[account].AccountSession.Mask(vlanSubnetMask).GetNetworkVlans()
-	if err != nil {
-		return nil, err
+
+	if len(*m.sessions[account].NetworkVlansCache) == 0 {
+		vlans, err := m.sessions[account].AccountSession.Mask(vlanSubnetMask).GetNetworkVlans()
+		if err != nil {
+			return nil, err
+		}
+
+		m.sessions[account].NetworkVlansCache = &vlans
 	}
-	return vlans, nil
+
+	subsetNetworkVlans := make([]datatypes.Network_Vlan, 0, len(*m.sessions[account].NetworkVlansCache))
+
+	if datacenterName != "" && podName != "" {
+
+		for _, v := range *m.sessions[account].NetworkVlansCache {
+			if *v.Datacenter.Name == datacenterName && *v.PodName == podName {
+				subsetNetworkVlans = append(subsetNetworkVlans, v)
+			}
+		}
+		return &subsetNetworkVlans, nil
+	}
+
+	return m.sessions[account].NetworkVlansCache, nil
 }
 
 func (m *Metadata) FindVCenterPhyDC(account string, vCenterIPAddresses []net.IP) (*VCenterLocation, error) {
@@ -41,13 +59,13 @@ func (m *Metadata) FindVCenterPhyDC(account string, vCenterIPAddresses []net.IP)
 		return nil, err
 	}
 
-	vlans, err := m.GetVlanSubnets(account)
+	vlans, err := m.GetVlanSubnets(account, "", "")
 	if err != nil {
 		return nil, err
 	}
 
 vlanloop:
-	for _, v := range vlans {
+	for _, v := range *vlans {
 		for _, s := range v.Subnets {
 			ip := fmt.Sprintf("%s/%d", *s.NetworkIdentifier, *s.Cidr)
 
@@ -64,7 +82,6 @@ vlanloop:
 					vcloc.IPAddress = vcIP
 					vcloc.VlanNumber = v.VlanNumber
 					break vlanloop
-
 				}
 			}
 		}

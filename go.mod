@@ -8,6 +8,7 @@ replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
 
 require (
 	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240423213246-337f25f38aed
+	github.com/openshift/api v0.0.0-20240425081546-8203151f085f
 	github.com/softlayer/softlayer-go v1.1.3
 	github.com/vmware/govmomi v0.34.2
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.3
