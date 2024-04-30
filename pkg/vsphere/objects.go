@@ -177,7 +177,7 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 				return nil, err
 			}
 			// we only care about cluster objects
-			if cObj, ok := ref.(object.ClusterComputeResource); ok {
+			if cObj, ok := ref.(*object.ClusterComputeResource); ok {
 				clusterTagMap[cObj.Reference().Value] = za.Tag.Name
 			}
 		}
@@ -190,35 +190,40 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 				return nil, err
 			}
 			// we only care about datacenter objects
-			if dcObj, ok := ref.(object.Datacenter); ok {
+			if dcObj, ok := ref.(*object.Datacenter); ok {
 				clusterObjects, err := sess.Finder.ClusterComputeResourceList(ctx, path.Join(dcObj.InventoryPath, "host", "..."))
 				if err != nil {
 					return nil, err
 				}
 
 				for _, clusterObj := range clusterObjects {
-
-					//var datastore map[string]bool
-
-					var datastore map[types.ManagedObjectReference]bool
+					datastore := make(map[types.ManagedObjectReference]bool)
 
 					if tagName, ok := clusterTagMap[clusterObj.Reference().Value]; ok {
 
 						var cMo mo.ClusterComputeResource
 
-						if err := clusterObj.Properties(ctx, clusterObj.Reference(), []string{"host,datastore,network"}, &cMo); err != nil {
+						if err := clusterObj.Properties(ctx, clusterObj.Reference(), []string{"host", "datastore", "network"}, &cMo); err != nil {
 							return nil, err
 						}
 
-						networks := make([]string, len(cMo.Network))
+						networks := make([]string, 0, len(cMo.Network))
 
 						for _, n := range cMo.Network {
 							var objref object.Reference
 							if objref, err = sess.Finder.ObjectReference(ctx, n.Reference()); err != nil {
 								return nil, err
 							}
+							if objDvPg, ok := objref.(*object.DistributedVirtualPortgroup); ok {
 
-							networks = append(networks, objref.(object.Network).InventoryPath)
+								// todo: we only care about ci-vlan-#### port groups
+								// todo: though maybe it doesn't matter, we can remove after this returns
+
+								// todo: temporary to make it cleaner
+								if strings.Contains(objDvPg.InventoryPath, "ci-vlan") {
+									networks = append(networks, objDvPg.InventoryPath)
+								}
+							}
 						}
 
 						// datastores available on the cluster
@@ -233,6 +238,8 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 								return nil, err
 							}
 
+							// TODO: there is a bug here, getting datastores that are not shared
+
 							// datastores available on a host
 							for _, ds := range hMo.Datastore {
 								// datastore exists on host and cluster
@@ -244,7 +251,7 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 							}
 						}
 
-						datastorePaths := make([]string, len(datastore))
+						datastorePaths := make([]string, 0, len(datastore))
 						for k, v := range datastore {
 							if v {
 								dsref, err := sess.Finder.ObjectReference(ctx, k)
@@ -252,7 +259,9 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 									return nil, err
 								}
 
-								datastorePaths = append(datastorePaths, dsref.(object.Datastore).InventoryPath)
+								if dsObj, ok := dsref.(*object.Datastore); ok {
+									datastorePaths = append(datastorePaths, dsObj.InventoryPath)
+								}
 							}
 						}
 
@@ -284,7 +293,13 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 		}
 	}
 
-	return nil, nil
+	failureDomains := make([]v1.VSpherePlatformFailureDomainSpec, 0, len(failureDomainMap))
+
+	for _, v := range failureDomainMap {
+		failureDomains = append(failureDomains, v)
+	}
+
+	return &failureDomains, nil
 }
 
 func (m *Metadata) GetTopologyByTags(server string, objectID []mo.Reference) error {

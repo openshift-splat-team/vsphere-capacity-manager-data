@@ -56,11 +56,17 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 			log.Fatal(err)
 		}
 
-		_, err = vmeta.GetFailureDomainsViaTag(k)
-
+		failureDomains, err := vmeta.GetFailureDomainsViaTag(k)
 		if err != nil {
 			return nil, err
 		}
+
+		for _, fd := range *failureDomains {
+			log.Print(fd.Region)
+			log.Print(fd.Zone)
+			log.Print(fd.Topology)
+		}
+
 		/*
 
 			var dcPaths []string
