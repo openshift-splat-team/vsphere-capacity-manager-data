@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/vmware/govmomi/vapi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/session"
 )
 
@@ -28,6 +29,7 @@ type VCenterContext struct {
 	VCenter            string
 	DatacenterContexts map[string]DatacenterContext
 	IPAddresses        []net.IP
+	TagCategories      []tags.Category
 }
 
 // VCenterCredential contains the vCenter username and password.

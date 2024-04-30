@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/softlayer/softlayer-go/services"
 	"github.com/softlayer/softlayer-go/session"
 )
@@ -17,6 +18,8 @@ type SoftlayerCredentials struct {
 type SoftlayerSession struct {
 	Session        *session.Session
 	AccountSession services.Account
+
+	NetworkVlansCache *[]datatypes.Network_Vlan
 }
 
 type Metadata struct {
