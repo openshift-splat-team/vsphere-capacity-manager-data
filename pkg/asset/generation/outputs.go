@@ -95,9 +95,6 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 
 	vcenterCredentials, err := parseVSphereCredentails(vCenterAuthFileName)
 
-	// TODO: this needs to be fixed
-	account := "ocp-vsphere"
-
 	for k, v := range vcenterCredentials {
 		_, err := vmeta.AddCredentials(k, v.Username, v.Password)
 		if err != nil {
@@ -177,16 +174,23 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 		}
 
 		// todo: just loop here?
-		location, err := imeta.FindVCenterPhyDC(account, vcIP)
-		if err != nil {
-			return nil, err
-		}
 
-		networkVlans, err := imeta.GetVlanSubnets(account, *location.DatacenterName, *location.PodName)
-		if err != nil {
-			return nil, err
+		var networkVlans *[]datatypes.Network_Vlan
+		var vcLocation *ibmcloud.VCenterLocation
+		for account, _ := range ibmCredentails {
+			vcLocation, err = imeta.FindVCenterPhyDC(account, vcIP)
+			if err != nil {
+				return nil, err
+			}
+
+			if vcLocation.DatacenterName != nil {
+				networkVlans, err = imeta.GetVlanSubnets(account, *vcLocation.DatacenterName, *vcLocation.PodName)
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
 		}
-		// todo: and end here?
 
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
@@ -197,8 +201,8 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 					Name:           portGroupSubnetsMap[vlanNumber].Name,
 					Subnets:        nv.Subnets,
 					Server:         k,
-					PodName:        location.PodName,
-					DatacenterName: location.DatacenterName,
+					PodName:        vcLocation.PodName,
+					DatacenterName: vcLocation.DatacenterName,
 				}
 
 				envs.PortGroupSubnets = append(envs.PortGroupSubnets, pg)
