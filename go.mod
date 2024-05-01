@@ -7,9 +7,9 @@ toolchain go1.22.2
 replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
 
 require (
-	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240423213246-337f25f38aed
 	github.com/openshift/api v0.0.0-20240425081546-8203151f085f
 	github.com/softlayer/softlayer-go v1.1.3
+	github.com/spf13/cobra v1.8.0
 	github.com/vmware/govmomi v0.34.2
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.3
 )
@@ -34,6 +34,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -48,6 +49,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/softlayer/xmlrpc v0.0.0-20200409220501-5f089df7cb7e // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect

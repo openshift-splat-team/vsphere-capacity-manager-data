@@ -1,3 +1,3 @@
 #!/bin/bash
-go build -o ./bin/generate -gcflags "all=-N -l" cmd/generate.go
+go build -o ./bin/vcmd -gcflags "all=-N -l" main.go
 

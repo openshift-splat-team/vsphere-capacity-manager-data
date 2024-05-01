@@ -1,8 +1,10 @@
 package generation
 
 import (
+	"encoding/json"
 	"log"
 	"net"
+	"os"
 
 	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/vmware/govmomi/vim25/types"
@@ -24,6 +26,10 @@ type PortGroupSubnet struct {
 	Subnets        []datatypes.Network_Subnet
 
 	// vcenter server
+	// TODO: we may not be able to do this association
+	// TODO: and maybe we don't even need it.
+	// TODO: problem: if I have two vcenters in the same datacenter and pod they most likely will have
+	// TODO: the same vlans attached
 	Server string
 }
 
@@ -39,27 +45,60 @@ type VSphereEnvironmentsConfig struct {
 	FailureDomainsResourceCapacity []FailureDomainResourceCapacity
 }
 
-func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
-	var envs VSphereEnvironmentsConfig
+func parseIBMCredentails(ibmCloudAuthFileName string) (map[string]ibmcloud.SoftlayerCredentials, error) {
+	ibmCredentails := make(map[string]ibmcloud.SoftlayerCredentials)
 
-	server := "vcs8e-vc.ocp2.dev.cluster.com"
-	vmeta := vsphere.NewMetadata()
-
-	vcenterCreds := make(map[string]vsphere.VCenterCredential)
-	vcenterCreds[server] = vsphere.VCenterCredential{
-		Username: "",
-		Password: "",
-	}
-
-	account := "foo"
-
-	imeta := ibmcloud.NewMetadata()
-	err := imeta.AddCredentials(account, "", "")
+	b, err := os.ReadFile(ibmCloudAuthFileName)
 	if err != nil {
 		return nil, err
 	}
 
-	for k, v := range vcenterCreds {
+	err = json.Unmarshal(b, &ibmCredentails)
+	if err != nil {
+		return nil, err
+	}
+
+	return ibmCredentails, nil
+}
+func parseVSphereCredentails(vcenterAuthFileName string) (map[string]vsphere.VCenterCredential, error) {
+	vCenterCredentails := make(map[string]vsphere.VCenterCredential)
+
+	b, err := os.ReadFile(vcenterAuthFileName)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(b, &vCenterCredentails)
+	if err != nil {
+		return nil, err
+	}
+	return vCenterCredentails, nil
+}
+
+func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName string) (*VSphereEnvironmentsConfig, error) {
+	var envs VSphereEnvironmentsConfig
+
+	vmeta := vsphere.NewMetadata()
+	imeta := ibmcloud.NewMetadata()
+
+	ibmCredentails, err := parseIBMCredentails(ibmCloudAuthFileName)
+	if err != nil {
+		return nil, err
+	}
+
+	for a, i := range ibmCredentails {
+		err := imeta.AddCredentials(a, i.Username, i.ApiToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	vcenterCredentials, err := parseVSphereCredentails(vCenterAuthFileName)
+
+	// TODO: this needs to be fixed
+	account := "ocp-vsphere"
+
+	for k, v := range vcenterCredentials {
 		_, err := vmeta.AddCredentials(k, v.Username, v.Password)
 		if err != nil {
 			log.Fatal(err)
@@ -137,6 +176,7 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 			log.Fatal(err)
 		}
 
+		// todo: just loop here?
 		location, err := imeta.FindVCenterPhyDC(account, vcIP)
 		if err != nil {
 			return nil, err
@@ -146,6 +186,7 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		// todo: and end here?
 
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
