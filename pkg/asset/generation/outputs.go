@@ -27,9 +27,16 @@ type PortGroupSubnet struct {
 	Server string
 }
 
+type FailureDomainResourceCapacity struct {
+	NumCpuCores int16
+	TotalMemory int64
+	Name        string
+}
+
 type VSphereEnvironmentsConfig struct {
 	configv1.VSpherePlatformSpec
-	PortGroupSubnets []PortGroupSubnet
+	PortGroupSubnets               []PortGroupSubnet
+	FailureDomainsResourceCapacity []FailureDomainResourceCapacity
 }
 
 func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
@@ -62,6 +69,25 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		for _, fd := range *failureDomains {
+			cObj, err := vmeta.GetClusterByPath(fd.Server, fd.Topology.ComputeCluster)
+			if err != nil {
+				return nil, err
+			}
+
+			cpu, memory, err := vmeta.GetClusterCapacity(fd.Server, cObj)
+			if err != nil {
+				return nil, err
+			}
+
+			envs.FailureDomainsResourceCapacity = append(envs.FailureDomainsResourceCapacity, FailureDomainResourceCapacity{
+				Name:        fd.Name,
+				NumCpuCores: cpu,
+				TotalMemory: memory,
+			})
+		}
+
 		envs.FailureDomains = append(envs.FailureDomains, *failureDomains...)
 
 		var dcPaths []string
@@ -104,7 +130,6 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 
 		if k != *url {
 			log.Printf("WARN: vCenter URL does not match %s != %s", k, *url)
-
 		}
 
 		vcIP, err := net.LookupIP(k)
@@ -116,13 +141,6 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		log.Printf("vCenter: %s, IP: %s, DC: %s, Pod: %s, Router Hostname: %s",
-			k,
-			location.IPAddress.String(),
-			*location.DatacenterName,
-			*location.PodName,
-			*location.PrimaryRouterHostname)
 
 		networkVlans, err := imeta.GetVlanSubnets(account, *location.DatacenterName, *location.PodName)
 		if err != nil {
@@ -145,31 +163,7 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 				envs.PortGroupSubnets = append(envs.PortGroupSubnets, pg)
 			}
 		}
-
-		// todo: define failure domains...
-
-		// region-zone pair -> datacenter, cluster, all multi host accessible datastores
-		// resource pool?
-
 	}
-
-	/*
-		envs.VCenters[0].Datacenters
-		envs.VCenters[0].Server
-
-		envs.FailureDomains[0].Server
-		envs.FailureDomains[0].Name
-		envs.FailureDomains[0].Region
-		envs.FailureDomains[0].Zone
-		envs.FailureDomains[0].Topology.Datacenter
-		envs.FailureDomains[0].Topology.Datastore
-		envs.FailureDomains[0].Topology.Folder
-		envs.FailureDomains[0].Topology.ComputeCluster
-		envs.FailureDomains[0].Topology.Networks
-		envs.FailureDomains[0].Topology.ResourcePool
-		envs.FailureDomains[0].Topology.Template
-
-	*/
 
 	return &envs, nil
 }

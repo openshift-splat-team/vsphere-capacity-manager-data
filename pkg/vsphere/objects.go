@@ -254,12 +254,13 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 						clusterName := clusterObj.Name()
 						datacenterName := dcObj.Name()
 
-						key := fmt.Sprintf("%s-%s", datacenterName, clusterName)
+						key := fmt.Sprintf("%s-%s-%s", server, datacenterName, clusterName)
 
 						failureDomainMap[key] = v1.VSpherePlatformFailureDomainSpec{
 							Region: ra.Tag.Name,
 							Zone:   tagName,
 							Server: server,
+							Name:   key,
 							Topology: v1.VSpherePlatformTopology{
 								Datacenter:     dcObj.InventoryPath,
 								ComputeCluster: clusterObj.InventoryPath,
@@ -417,6 +418,30 @@ func (m *Metadata) GetPortGroups(server string, datacenter *object.Datacenter) (
 
 	return portGroupManagedObjects, nil
 }
+
+func (m *Metadata) GetDatacenterByPath(server, path string) (*object.Datacenter, error) {
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
+
+	sess, err := m.Session(ctx, server)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess.Finder.Datacenter(ctx, path)
+}
+func (m *Metadata) GetClusterByPath(server, path string) (*object.ClusterComputeResource, error) {
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
+
+	sess, err := m.Session(ctx, server)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess.Finder.ClusterComputeResource(ctx, path)
+}
+
 func (m *Metadata) GetDatacenters(server string) ([]*object.Datacenter, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
@@ -429,7 +454,7 @@ func (m *Metadata) GetDatacenters(server string) ([]*object.Datacenter, error) {
 	return sess.Finder.DatacenterList(ctx, "/...")
 }
 
-func GetClusters(sess *session.Session, datacenter *object.Datacenter) ([]*object.ClusterComputeResource, error) {
+func (m *Metadata) GetClusters(sess *session.Session, datacenter *object.Datacenter) ([]*object.ClusterComputeResource, error) {
 	var clusters []*object.ClusterComputeResource
 	var err error
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
@@ -443,12 +468,18 @@ func GetClusters(sess *session.Session, datacenter *object.Datacenter) ([]*objec
 	return clusters, nil
 }
 
-func GetClusterCapacity(sess *session.Session, cluster *object.ClusterComputeResource) (int16, int64, error) {
-	var computeResource mo.ClusterComputeResource
-
+func (m *Metadata) GetClusterCapacity(server string, cluster *object.ClusterComputeResource) (int16, int64, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
 
+	/*
+		sess, err := m.Session(ctx, server)
+		if err != nil {
+			return 0, 0, err
+		}
+
+	*/
+	var computeResource mo.ClusterComputeResource
 	if err := cluster.Properties(ctx, cluster.Reference(), []string{"summary"}, &computeResource); err != nil {
 		return 0, 0, err
 	}
