@@ -27,7 +27,7 @@ func (m *Metadata) GetVlanSubnets(account, datacenterName, podName string) (*[]d
 		return nil, err
 	}
 
-	if len(*m.sessions[account].NetworkVlansCache) == 0 {
+	if m.sessions[account].NetworkVlansCache == nil || len(*m.sessions[account].NetworkVlansCache) == 0 {
 		vlans, err := m.sessions[account].AccountSession.Mask(vlanSubnetMask).GetNetworkVlans()
 		if err != nil {
 			return nil, err

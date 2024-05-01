@@ -99,23 +99,6 @@ func (m *Metadata) GetTagCategories(server string) error {
 	return nil
 }
 
-/*
-   "FailureDomains": [
-       {
-           "name": "us-east-4",
-           "vcenter": "vcs8e-vc.ocp2.dev.cluster.com",
-           "zone": "us-east-4a",
-           "region": "us-east"
-       },
-       {
-           "name": "us-south-1",
-           "vcenter": "v8c-2-vcenter.ocp2.dev.cluster.com",
-           "zone": "us-south-1a",
-           "region": "us-south"
-       }
-   ],
-*/
-
 func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatformFailureDomainSpec, error) {
 	failureDomainMap := make(map[string]v1.VSpherePlatformFailureDomainSpec)
 
@@ -183,26 +166,38 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 		}
 	}
 
+	// loop through the region tags Attached Objects (tags.AttachedObjects)
 	for _, ra := range attachedRegionObjects {
+
+		// Loop though the []Reference (vCenter Objects tagged)
 		for _, raObj := range ra.ObjectIDs {
+
+			// We need the object.Reference to get InventoryPath
 			ref, err := sess.Finder.ObjectReference(ctx, raObj.Reference())
 			if err != nil {
 				return nil, err
 			}
-			// we only care about datacenter objects
+
+			// Since currently we only have a region as a datacenter
+			// we only want datacenter objects
 			if dcObj, ok := ref.(*object.Datacenter); ok {
+
+				// Retrieve all the child clusters
 				clusterObjects, err := sess.Finder.ClusterComputeResourceList(ctx, path.Join(dcObj.InventoryPath, "host", "..."))
 				if err != nil {
 					return nil, err
 				}
 
+				// Loop over all the clusters available in the datacenter
 				for _, clusterObj := range clusterObjects {
 					datastore := make(map[types.ManagedObjectReference]bool)
 
+					// defined above, the clusterTagMap contains the clusters that
+					// have been tagged with openshift-zone
 					if tagName, ok := clusterTagMap[clusterObj.Reference().Value]; ok {
 
 						var cMo mo.ClusterComputeResource
-
+						// retrieve the child fields of the Cluster
 						if err := clusterObj.Properties(ctx, clusterObj.Reference(), []string{"host", "datastore", "network"}, &cMo); err != nil {
 							return nil, err
 						}
@@ -226,28 +221,17 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 							}
 						}
 
-						// datastores available on the cluster
+						// Initialize the datastore map
 						for _, ds := range cMo.Datastore {
-							datastore[ds] = true
-						}
-
-						var hMo mo.HostSystem
-						// hosts available on the cluster
-						for _, h := range cMo.Host {
-							if err := sess.PropertyCollector().RetrieveOne(ctx, h.Reference(), []string{"datastore"}, &hMo); err != nil {
+							var dMo mo.Datastore
+							err := sess.PropertyCollector().RetrieveOne(ctx, ds, []string{"host"}, &dMo)
+							if err != nil {
 								return nil, err
 							}
 
-							// TODO: there is a bug here, getting datastores that are not shared
-
-							// datastores available on a host
-							for _, ds := range hMo.Datastore {
-								// datastore exists on host and cluster
-								if _, ok := datastore[ds]; !ok {
-									datastore[ds] = false
-								} else {
-									datastore[ds] = datastore[ds] && true
-								}
+							datastore[ds] = false
+							if len(cMo.Host) == (len(dMo.Host)) {
+								datastore[ds] = true
 							}
 						}
 
@@ -385,14 +369,14 @@ func (m *Metadata) GetDistributedPortGroups(server, portGroupSubString string) (
 		return nil, err
 	}
 
-	err = v.Retrieve(context.TODO(), kind, []string{"config"}, portGroupManagedObjects)
+	err = v.Retrieve(context.TODO(), kind, []string{"config"}, &portGroupManagedObjects)
 	if err != nil {
 		return nil, err
 	}
 
 	var portGroups []mo.DistributedVirtualPortgroup
 	for _, pg := range portGroupManagedObjects {
-		if strings.Contains(pg.Name, portGroupSubString) {
+		if strings.Contains(pg.Config.Name, portGroupSubString) {
 			portGroups = append(portGroups, pg)
 		}
 	}
