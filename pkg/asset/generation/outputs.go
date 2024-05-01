@@ -2,8 +2,10 @@ package generation
 
 import (
 	"log"
+	"net"
 
 	"github.com/softlayer/softlayer-go/datatypes"
+	"github.com/vmware/govmomi/vim25/types"
 
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/ibmcloud"
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/vsphere"
@@ -19,7 +21,7 @@ type PortGroupSubnet struct {
 	// IBM Variables
 	PodName        *string
 	DatacenterName *string
-	Subnets        datatypes.Network_Subnet
+	Subnets        []datatypes.Network_Subnet
 
 	// vcenter server
 	Server string
@@ -60,94 +62,95 @@ func CreateVSphereEnvironmentsConfig() (*VSphereEnvironmentsConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		envs.FailureDomains = append(envs.FailureDomains, *failureDomains...)
 
-		for _, fd := range *failureDomains {
-			log.Print(fd.Region)
-			log.Print(fd.Zone)
-			log.Print(fd.Topology)
+		var dcPaths []string
+		datacenters, err := vmeta.GetDatacenters(k)
+		if err != nil {
+			return nil, err
 		}
 
-		/*
+		for _, dc := range datacenters {
+			dcPaths = append(dcPaths, dc.InventoryPath)
+		}
 
-			var dcPaths []string
-			datacenters, err := vmeta.GetDatacenters(k)
-			if err != nil {
-				return nil, err
+		envs.VCenters = append(envs.VCenters, configv1.VSpherePlatformVCenterSpec{
+			Server:      k,
+			Datacenters: dcPaths,
+		})
+
+		portGroups, err := vmeta.GetDistributedPortGroups(k, "ci-vlan")
+		if err != nil {
+			return nil, err
+		}
+
+		portGroupSubnetsMap := make(map[int32]PortGroupSubnet)
+
+		for _, pg := range portGroups {
+			portSetting := pg.Config.DefaultPortConfig.(*types.VMwareDVSPortSetting)
+			vlanId := portSetting.Vlan.(*types.VmwareDistributedVirtualSwitchVlanIdSpec).VlanId
+
+			portGroupSubnetsMap[vlanId] = PortGroupSubnet{
+				Name:   pg.Config.Name,
+				VlanId: vlanId,
+				Server: k,
 			}
+		}
 
-			for _, dc := range datacenters {
-				dcPaths = append(dcPaths, dc.InventoryPath)
+		url, err := vmeta.GetHostnameUrlVpxd(k)
+		if err != nil {
+			return nil, err
+		}
 
-			}
+		if k != *url {
+			log.Printf("WARN: vCenter URL does not match %s != %s", k, *url)
 
-			envs.VCenters = append(envs.VCenters, configv1.VSpherePlatformVCenterSpec{
-				Server:      k,
-				Datacenters: dcPaths,
-			})
+		}
 
-			portGroups, err := vmeta.GetDistributedPortGroups(k, "ci-")
-			if err != nil {
-				return nil, err
-			}
+		vcIP, err := net.LookupIP(k)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-			portGroupSubnetsMap := make(map[int32]PortGroupSubnet)
+		location, err := imeta.FindVCenterPhyDC(account, vcIP)
+		if err != nil {
+			return nil, err
+		}
 
-			for _, pg := range portGroups {
-				portSetting := pg.Config.DefaultPortConfig.(*types.VMwareDVSPortSetting)
-				vlanId := portSetting.Vlan.(*types.VmwareDistributedVirtualSwitchVlanIdSpec).VlanId
+		log.Printf("vCenter: %s, IP: %s, DC: %s, Pod: %s, Router Hostname: %s",
+			k,
+			location.IPAddress.String(),
+			*location.DatacenterName,
+			*location.PodName,
+			*location.PrimaryRouterHostname)
 
-				portGroupSubnetsMap[vlanId] = PortGroupSubnet{
-					Name:   pg.Name,
-					VlanId: vlanId,
-					Server: k,
+		networkVlans, err := imeta.GetVlanSubnets(account, *location.DatacenterName, *location.PodName)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, nv := range *networkVlans {
+			vlanNumber := int32(*nv.VlanNumber)
+			if _, ok := portGroupSubnetsMap[vlanNumber]; ok {
+
+				pg := PortGroupSubnet{
+					VlanId:         vlanNumber,
+					Name:           portGroupSubnetsMap[vlanNumber].Name,
+					Subnets:        nv.Subnets,
+					Server:         k,
+					PodName:        location.PodName,
+					DatacenterName: location.DatacenterName,
 				}
+
+				envs.PortGroupSubnets = append(envs.PortGroupSubnets, pg)
 			}
+		}
 
-			url, err := vmeta.GetHostnameUrlVpxd(k)
-			if err != nil {
-				return nil, err
-			}
+		// todo: define failure domains...
 
-			if k != *url {
-				log.Printf("WARN: vCenter URL does not match %s != %s", k, *url)
+		// region-zone pair -> datacenter, cluster, all multi host accessible datastores
+		// resource pool?
 
-			}
-
-			vcIP, err := net.LookupIP(k)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			location, err := imeta.FindVCenterPhyDC(account, vcIP)
-			if err != nil {
-				return nil, err
-			}
-
-			log.Printf("vCenter: %s, IP: %s, DC: %s, Pod: %s, Router Hostname: %s",
-				k,
-				location.IPAddress.String(),
-				*location.DatacenterName,
-				*location.PodName,
-				*location.PrimaryRouterHostname)
-
-			networkVlans, err := imeta.GetVlanSubnets(account, *location.DatacenterName, *location.PodName)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, nv := range *networkVlans {
-				vlanNumber := int32(*nv.VlanNumber)
-				if _, ok := portGroupSubnetsMap[vlanNumber]; ok {
-					envs.PortGroupSubnets = append(envs.PortGroupSubnets, portGroupSubnetsMap[vlanNumber])
-				}
-			}
-
-			// todo: define failure domains...
-
-			// region-zone pair -> datacenter, cluster, all multi host accessible datastores
-			// resource pool?
-
-		*/
 	}
 
 	/*
