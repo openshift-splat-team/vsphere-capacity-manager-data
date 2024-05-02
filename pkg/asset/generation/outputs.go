@@ -30,7 +30,7 @@ type PortGroupSubnet struct {
 	// TODO: and maybe we don't even need it.
 	// TODO: problem: if I have two vcenters in the same datacenter and pod they most likely will have
 	// TODO: the same vlans attached
-	Server string
+	//Server string
 }
 
 type FailureDomainResourceCapacity struct {
@@ -102,8 +102,13 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 		}
 
 		failureDomains, err := vmeta.GetFailureDomainsViaTag(k)
-		if err != nil {
-			return nil, err
+		if failureDomains == nil {
+			if err != nil {
+				log.Printf("WARNING: No failure domains found for %s, %s", k, err)
+			} else {
+				log.Printf("WARNING: No failure domains found for %s", k)
+			}
+			continue
 		}
 
 		for _, fd := range *failureDomains {
@@ -155,7 +160,6 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			portGroupSubnetsMap[vlanId] = PortGroupSubnet{
 				Name:   pg.Config.Name,
 				VlanId: vlanId,
-				Server: k,
 			}
 		}
 
@@ -192,15 +196,25 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			}
 		}
 
+		if networkVlans == nil {
+			if vcLocation != nil && vcLocation.PodName != nil {
+				log.Printf("WARNING: unable to retrieve IBM network subnets in datacenter pod %s vCenter %s using IP address %s", *vcLocation.PodName, k, vcIP[0].String())
+			} else {
+				log.Printf("WARNING: unable to find physcial location of vCenter %s using IP address %s", k, vcIP[0].String())
+			}
+
+			continue
+		}
+
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
 			if _, ok := portGroupSubnetsMap[vlanNumber]; ok {
 
 				pg := PortGroupSubnet{
-					VlanId:         vlanNumber,
-					Name:           portGroupSubnetsMap[vlanNumber].Name,
-					Subnets:        nv.Subnets,
-					Server:         k,
+					VlanId:  vlanNumber,
+					Name:    portGroupSubnetsMap[vlanNumber].Name,
+					Subnets: nv.Subnets,
+					//Server:         k,
 					PodName:        vcLocation.PodName,
 					DatacenterName: vcLocation.DatacenterName,
 				}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/vmware/govmomi/vapi/tags"
 	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/session"
@@ -47,7 +46,7 @@ type Metadata struct {
 
 	VCenterCredentials map[string]VCenterCredential
 
-	mutex sync.Mutex
+	//mutex sync.Mutex
 }
 
 // NewMetadata initializes a new Metadata object.
@@ -99,8 +98,8 @@ func (m *Metadata) AddCredentials(server, username, password string) (*session.P
 
 // Session returns a session from unlockedSession based on the server (vCenter URL).
 func (m *Metadata) Session(ctx context.Context, server string) (*session.Session, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	//m.mutex.Lock()
+	//defer m.mutex.Unlock()
 
 	// m.sessions is not stored in the json state file - there is no real reason to do this
 	// but upon returning to Session (create manifest, create cluster) the sessions map is

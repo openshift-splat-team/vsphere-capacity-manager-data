@@ -3,7 +3,6 @@ package ibmcloud
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/softlayer/softlayer-go/services"
@@ -26,7 +25,7 @@ type Metadata struct {
 	sessions    map[string]*SoftlayerSession
 	credentials map[string]*SoftlayerCredentials
 
-	mutex sync.Mutex
+	//mutex sync.Mutex
 }
 
 func NewMetadata() *Metadata {
@@ -46,8 +45,8 @@ func (m *Metadata) AddCredentials(account, username, apiToken string) error {
 	return nil
 }
 func (m *Metadata) Session(ctx context.Context, account string) (*SoftlayerSession, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	//m.mutex.Lock()
+	//defer m.mutex.Unlock()
 
 	// m.sessions is not stored in the json state file - there is no real reason to do this
 	// but upon returning to Session (create manifest, create cluster) the sessions map is

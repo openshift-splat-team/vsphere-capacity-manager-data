@@ -9,7 +9,10 @@ import (
 )
 
 const (
-	vlanSubnetMask = `mask[id,name,vlanNumber,podName,fullyQualifiedName,datacenter[name],subnets[id,ipAddressCount,gateway,cidr,netmask,networkIdentifier,subnetType,ipAddresses[ipAddress,isNetwork,isBroadcast,isGateway]],primaryRouter[hostname]]`
+	vlanSubnetMask = `mask[id,name,vlanNumber,podName,fullyQualifiedName,datacenter[name],subnets[ipAddressCount,gateway,cidr,netmask,networkIdentifier,subnetType,ipAddresses[ipAddress]],primaryRouter[hostname]]`
+
+	//backup copy before removal of parameters that maybe we don't need to make the config more readable
+	//vlanSubnetMask = `mask[id,name,vlanNumber,podName,fullyQualifiedName,datacenter[name],subnets[id,ipAddressCount,gateway,cidr,netmask,networkIdentifier,subnetType,ipAddresses[ipAddress,isNetwork,isBroadcast,isGateway]],primaryRouter[hostname]]`
 )
 
 type VCenterLocation struct {
@@ -39,9 +42,18 @@ func (m *Metadata) GetVlanSubnets(account, datacenterName, podName string) (*[]d
 	subsetNetworkVlans := make([]datatypes.Network_Vlan, 0, len(*m.sessions[account].NetworkVlansCache))
 
 	if datacenterName != "" && podName != "" {
-
 		for _, v := range *m.sessions[account].NetworkVlansCache {
 			if *v.Datacenter.Name == datacenterName && *v.PodName == podName {
+				// ** NOTE ** removing all but the first 20
+				maxIpAddresses := uint(20)
+				for i, subnet := range v.Subnets {
+					if *subnet.IpAddressCount < maxIpAddresses {
+						maxIpAddresses = *subnet.IpAddressCount
+					}
+
+					v.Subnets[i].IpAddresses = v.Subnets[i].IpAddresses[:maxIpAddresses]
+				}
+
 				subsetNetworkVlans = append(subsetNetworkVlans, v)
 			}
 		}
