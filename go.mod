@@ -4,13 +4,19 @@ go 1.22.0
 
 toolchain go1.22.2
 
-replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
+replace (
+	github.com/openshift-splat-team/vsphere-capacity-manager => /var/home/jcallen/Development/vsphere-capacity-manager
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
+
+)
 
 require (
-	github.com/openshift/api v0.0.0-20240425081546-8203151f085f
+	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240502162643-cd16b76cb69f
+	github.com/openshift/api v0.0.0-20240502183942-42506f3fcd01
 	github.com/softlayer/softlayer-go v1.1.3
 	github.com/spf13/cobra v1.8.0
 	github.com/vmware/govmomi v0.34.2
+	k8s.io/apimachinery v0.29.3
 	k8s.io/klog/v2 v2.110.1
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.3
 	sigs.k8s.io/controller-runtime v0.17.3
@@ -51,7 +57,6 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/softlayer/xmlrpc v0.0.0-20200409220501-5f089df7cb7e // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
@@ -67,7 +72,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.29.3 // indirect
 	k8s.io/apiextensions-apiserver v0.29.3 // indirect
-	k8s.io/apimachinery v0.29.3 // indirect
 	k8s.io/client-go v0.29.3 // indirect
 	k8s.io/component-base v0.29.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect

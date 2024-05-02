@@ -2,15 +2,18 @@ package generation
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"os"
 
 	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/vmware/govmomi/vim25/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/ibmcloud"
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/vsphere"
+	vcmv1 "github.com/openshift-splat-team/vsphere-capacity-manager/pkg/apis/vspherecapacitymanager.splat.io/v1"
 	configv1 "github.com/openshift/api/config/v1"
 )
 
@@ -127,6 +130,28 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 				NumCpuCores: cpu,
 				TotalMemory: memory,
 			})
+
+			pool := vcmv1.Pool{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fd.Name,
+				},
+				Spec: vcmv1.PoolSpec{
+					VSpherePlatformFailureDomainSpec: fd,
+					VCpus:                            int(cpu),
+					Memory:                           int(memory / 1024 / 1024 / 1024),
+					Storage:                          0,
+					Exclude:                          false,
+				},
+			}
+
+			b, err := json.MarshalIndent(pool, "", "  ")
+			if err != nil {
+				log.Print(err)
+			}
+
+			fmt.Print(string(b))
+
 		}
 
 		envs.FailureDomains = append(envs.FailureDomains, *failureDomains...)
