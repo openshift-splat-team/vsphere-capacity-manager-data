@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/c-robinson/iplib/v2"
 	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/vmware/govmomi/vim25/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,7 +79,7 @@ func parseVSphereCredentails(vcenterAuthFileName string) (map[string]vsphere.VCe
 	return vCenterCredentails, nil
 }
 
-func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName string) (*VSphereEnvironmentsConfig, error) {
+func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, ipv6SubnetString, portGroupSubString string) (*VSphereEnvironmentsConfig, error) {
 	var envs VSphereEnvironmentsConfig
 
 	vmeta := vsphere.NewMetadata()
@@ -171,7 +172,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			Datacenters: dcPaths,
 		})
 
-		portGroups, err := vmeta.GetDistributedPortGroups(k, "ci-vlan")
+		portGroups, err := vmeta.GetDistributedPortGroups(k, portGroupSubString)
 		if err != nil {
 			return nil, err
 		}
@@ -202,8 +203,6 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			log.Fatal(err)
 		}
 
-		// todo: just loop here?
-
 		var networkVlans *[]datatypes.Network_Vlan
 		var vcLocation *ibmcloud.VCenterLocation
 		for account, _ := range ibmCredentails {
@@ -233,18 +232,53 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
-			if _, ok := portGroupSubnetsMap[vlanNumber]; ok {
+			if pg, ok := portGroupSubnetsMap[vlanNumber]; ok {
 
-				pg := PortGroupSubnet{
-					VlanId:  vlanNumber,
-					Name:    portGroupSubnetsMap[vlanNumber].Name,
-					Subnets: nv.Subnets,
-					//Server:         k,
-					PodName:        vcLocation.PodName,
-					DatacenterName: vcLocation.DatacenterName,
+				if len(nv.Subnets) > 1 {
+					log.Print("WARNING: the length of the vlan subnet is greater then one, using only the first entry")
 				}
 
-				envs.PortGroupSubnets = append(envs.PortGroupSubnets, pg)
+				subnet := nv.Subnets[0]
+
+				ipAddressesAsString := make([]string, 0, len(subnet.IpAddresses))
+				for _, ipAddress := range subnet.IpAddresses {
+					ipAddressesAsString = append(ipAddressesAsString, *ipAddress.IpAddress)
+				}
+
+				ipv6Subnet := iplib.Net6FromStr(fmt.Sprintf("%s:%d::1/64", ipv6SubnetString, *nv.VlanNumber))
+
+				cidrV6, _ := ipv6Subnet.Mask().Size()
+
+				network := vcmv1.Network{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: pg.Name,
+					},
+					Spec: vcmv1.NetworkSpec{
+						PortGroupName:      pg.Name,
+						VlanId:             string(rune(*nv.VlanNumber)),
+						PodName:            subnet.PodName,
+						DatacenterName:     subnet.Datacenter.Name,
+						Cidr:               subnet.Cidr,
+						Gateway:            subnet.Gateway,
+						IpAddressCount:     subnet.IpAddressCount,
+						Netmask:            subnet.Netmask,
+						SubnetType:         subnet.SubnetType,
+						MachineNetworkCidr: fmt.Sprintf("%s/%d", *subnet.NetworkIdentifier, *subnet.Cidr),
+						IpAddresses:        ipAddressesAsString,
+						CidrIPv6:           cidrV6,
+						GatewayIPv6:        ipv6Subnet.Enumerate(1, 2)[0].String(),
+						IpV6prefix:         ipv6Subnet.String(),
+						StartIPv6Address:   ipv6Subnet.Enumerate(1, 4)[0].String(),
+					},
+				}
+
+				// testing only
+				b, err := json.MarshalIndent(network, "", "  ")
+				if err != nil {
+					log.Print(err)
+				}
+
+				fmt.Print(string(b))
 			}
 		}
 	}

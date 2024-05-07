@@ -11,6 +11,7 @@ replace (
 )
 
 require (
+	github.com/c-robinson/iplib/v2 v2.0.5
 	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240502162643-cd16b76cb69f
 	github.com/openshift/api v0.0.0-20240502183942-42506f3fcd01
 	github.com/softlayer/softlayer-go v1.1.3
@@ -76,6 +77,7 @@ require (
 	k8s.io/component-base v0.29.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
+	lukechampine.com/uint128 v1.3.0 // indirect
 	sigs.k8s.io/cluster-api v0.0.0-00010101000000-000000000000 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

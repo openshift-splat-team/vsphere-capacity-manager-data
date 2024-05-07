@@ -4,6 +4,9 @@ github.com/beorn7/perks/quantile
 # github.com/blang/semver v3.5.1+incompatible
 ## explicit
 github.com/blang/semver
+# github.com/c-robinson/iplib/v2 v2.0.5
+## explicit; go 1.20
+github.com/c-robinson/iplib/v2
 # github.com/cespare/xxhash/v2 v2.2.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
@@ -545,6 +548,9 @@ k8s.io/utils/pointer
 k8s.io/utils/ptr
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
+# lukechampine.com/uint128 v1.3.0
+## explicit; go 1.12
+lukechampine.com/uint128
 # sigs.k8s.io/cluster-api v0.0.0-00010101000000-000000000000 => sigs.k8s.io/cluster-api v1.7.0
 ## explicit; go 1.21
 sigs.k8s.io/cluster-api/api/v1beta1
