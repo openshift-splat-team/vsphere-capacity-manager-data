@@ -28,8 +28,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&LeaseList{},
 		&Pool{},
 		&PoolList{},
-		&ResourceRequest{},
-		&ResourceRequestList{},
+		&Network{},
+		&NetworkList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, GroupVersion)

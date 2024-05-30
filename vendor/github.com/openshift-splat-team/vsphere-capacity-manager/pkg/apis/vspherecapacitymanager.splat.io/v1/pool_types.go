@@ -1,15 +1,15 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configv1 "github.com/openshift/api/config/v1"
 )
 
 const (
-	POOLS_LAST_LEASE_UPDATE_ANNOTATION = "vspherecapacitymanager.splat.io/last-lease-update"
-	//POOLS_STATUS_ = "2006-01-02
+	POOLS_LAST_LEASE_UPDATE_ANNOTATION = "vspherecapacitymanager.splat.io/last-pool-update"
+	PoolFinalizer                      = "vsphere-capacity-manager.splat-team.io/pool-finalizer"
+	PoolKind                           = "Pool"
 )
 
 // +genclient
@@ -22,8 +22,9 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="vCPUs",type=string,JSONPath=`.status.vcpus-available`
 // +kubebuilder:printcolumn:name="Memory(GB)",type=string,JSONPath=`.status.memory-available`
-// +kubebuilder:printcolumn:name="Storage(GB)",type=string,JSONPath=`.status.datastore-available`
 // +kubebuilder:printcolumn:name="Networks",type=string,JSONPath=`.status.network-available`
+// +kubebuilder:printcolumn:name="Disabled",type=string,JSONPath=`.spec.noSchedule`
+// +kubebuilder:printcolumn:name="Excluded",type=string,JSONPath=`.spec.exclude`
 type Pool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -33,9 +34,18 @@ type Pool struct {
 	Status PoolStatus `json:"status"`
 }
 
+type IBMPoolSpec struct {
+	// Pod the pod in the datacenter where the vCenter resides
+	Pod string `json:"pod"`
+	// Pod the pod in the datacenter where the vCenter resides
+	Datacenter string `json:"datacenter"`
+}
+
 // PoolSpec defines the specification for a pool
 type PoolSpec struct {
 	configv1.VSpherePlatformFailureDomainSpec `json:",inline"`
+	// IBMPoolSpec topology information associated with this pool
+	IBMPoolSpec IBMPoolSpec `json:"ibmPoolSpec,omitempty"`
 	// VCpus is the number of virtual CPUs
 	VCpus int `json:"vcpus"`
 	// Memory is the amount of memory in GB
@@ -46,6 +56,10 @@ type PoolSpec struct {
 	// This is useful if a job must be scheduled to a specific pool and that
 	// pool only has limited capacity.
 	Exclude bool `json:"exclude"`
+	// NoSchedule when true, new leases for this pool will not be allocated.
+	// any in progress leases will remain active until they are destroyed.
+	// +optional
+	NoSchedule bool `json:"noSchedule"`
 }
 
 // PoolStatus defines the status for a pool
@@ -59,19 +73,11 @@ type PoolStatus struct {
 	// StorageAvailable is the amount of storage in GB available in the pool
 	// +optional
 	DatastoreAvailable int `json:"datastore-available"`
-	// Leases is the list of leases assigned to this pool
-	// +optional
-	Leases []*corev1.TypedLocalObjectReference `json:"leases"`
 	// Networks is the number of networks available in the pool
 	// +optional
 	NetworkAvailable int `json:"network-available"`
-	// PortGroups is the list of port groups available in the pool
-	// +optional
-	PortGroups []Network `json:"port-groups"`
-	// ActivePortGroups is the list of port groups that are currently in use
-	// +optional
-	ActivePortGroups []Network `json:"active-port-groups"`
-	// Initialized is true when the pool has been initialize
+
+	// Initialized when true, the status fields have been initialized
 	// +optional
 	Initialized bool `json:"initialized"`
 }
