@@ -4,6 +4,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	NETWORKS_LAST_LEASE_UPDATE_ANNOTATION = "vspherecapacitymanager.splat.io/last-network-update"
+	NetworkFinalizer                      = "vsphere-capacity-manager.splat-team.io/network-finalizer"
+	NetworkKind                           = "Network"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -11,6 +17,8 @@ import (
 // +k8s:openapi-gen=true
 // +kubebuilder:object:root=true
 // +kubebuilder:scope=Namespaced
+// +kubebuilder:printcolumn:name="Port Group",type=string,JSONPath=`.spec.portGroupName`
+// +kubebuilder:printcolumn:name="Pod",type=string,JSONPath=`.spec.podName`
 type Network struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -72,6 +80,10 @@ type NetworkSpec struct {
 	// StartIPv6Address represents the start IPv6 address for DHCP.
 	// +optional
 	StartIPv6Address string `json:"startIPv6Address"`
+
+	// PrimaryRouterHostname hostname of the primary router.
+	// +optional
+	PrimaryRouterHostname string `json:"primaryRouterHostname"`
 }
 
 // NetworkStatus defines the status for a pool
