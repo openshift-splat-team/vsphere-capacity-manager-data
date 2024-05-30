@@ -2,15 +2,19 @@ package generation
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"os"
 
+	"github.com/c-robinson/iplib/v2"
 	"github.com/softlayer/softlayer-go/datatypes"
 	"github.com/vmware/govmomi/vim25/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/ibmcloud"
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/vsphere"
+	vcmv1 "github.com/openshift-splat-team/vsphere-capacity-manager/pkg/apis/vspherecapacitymanager.splat.io/v1"
 	configv1 "github.com/openshift/api/config/v1"
 )
 
@@ -75,21 +79,22 @@ func parseVSphereCredentails(vcenterAuthFileName string) (map[string]vsphere.VCe
 	return vCenterCredentails, nil
 }
 
-func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName string) (*VSphereEnvironmentsConfig, error) {
+func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, ipv6SubnetString, portGroupSubString string) (*VSphereEnvironmentsConfig, []Asset, error) {
 	var envs VSphereEnvironmentsConfig
+	var assets = make([]Asset, 0)
 
 	vmeta := vsphere.NewMetadata()
 	imeta := ibmcloud.NewMetadata()
 
 	ibmCredentails, err := parseIBMCredentails(ibmCloudAuthFileName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for a, i := range ibmCredentails {
 		err := imeta.AddCredentials(a, i.Username, i.ApiToken)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -101,40 +106,10 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			log.Fatal(err)
 		}
 
-		failureDomains, err := vmeta.GetFailureDomainsViaTag(k)
-		if failureDomains == nil {
-			if err != nil {
-				log.Printf("WARNING: No failure domains found for %s, %s", k, err)
-			} else {
-				log.Printf("WARNING: No failure domains found for %s", k)
-			}
-			continue
-		}
-
-		for _, fd := range *failureDomains {
-			cObj, err := vmeta.GetClusterByPath(fd.Server, fd.Topology.ComputeCluster)
-			if err != nil {
-				return nil, err
-			}
-
-			cpu, memory, err := vmeta.GetClusterCapacity(fd.Server, cObj)
-			if err != nil {
-				return nil, err
-			}
-
-			envs.FailureDomainsResourceCapacity = append(envs.FailureDomainsResourceCapacity, FailureDomainResourceCapacity{
-				Name:        fd.Name,
-				NumCpuCores: cpu,
-				TotalMemory: memory,
-			})
-		}
-
-		envs.FailureDomains = append(envs.FailureDomains, *failureDomains...)
-
 		var dcPaths []string
 		datacenters, err := vmeta.GetDatacenters(k)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		for _, dc := range datacenters {
@@ -146,9 +121,9 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			Datacenters: dcPaths,
 		})
 
-		portGroups, err := vmeta.GetDistributedPortGroups(k, "ci-vlan")
+		portGroups, err := vmeta.GetDistributedPortGroups(k, portGroupSubString)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		portGroupSubnetsMap := make(map[int32]PortGroupSubnet)
@@ -165,7 +140,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 
 		url, err := vmeta.GetHostnameUrlVpxd(k)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if k != *url {
@@ -177,24 +152,78 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			log.Fatal(err)
 		}
 
-		// todo: just loop here?
-
 		var networkVlans *[]datatypes.Network_Vlan
 		var vcLocation *ibmcloud.VCenterLocation
 		for account, _ := range ibmCredentails {
 			vcLocation, err = imeta.FindVCenterPhyDC(account, vcIP)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if vcLocation.DatacenterName != nil {
 				networkVlans, err = imeta.GetVlanSubnets(account, *vcLocation.DatacenterName, *vcLocation.PodName)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				break
 			}
 		}
+
+		failureDomains, err := vmeta.GetFailureDomainsViaTag(k)
+		if failureDomains == nil {
+			if err != nil {
+				log.Printf("WARNING: No failure domains found for %s, %s", k, err)
+			} else {
+				log.Printf("WARNING: No failure domains found for %s", k)
+			}
+			continue
+		}
+
+		for _, fd := range *failureDomains {
+			cObj, err := vmeta.GetClusterByPath(fd.Server, fd.Topology.ComputeCluster)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			cpu, memory, err := vmeta.GetClusterCapacity(fd.Server, cObj)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			envs.FailureDomainsResourceCapacity = append(envs.FailureDomainsResourceCapacity, FailureDomainResourceCapacity{
+				Name:        fd.Name,
+				NumCpuCores: cpu,
+				TotalMemory: memory,
+			})
+
+			pool := vcmv1.Pool{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Pool",
+					APIVersion: fmt.Sprintf("%s/v1", vcmv1.APIGroupName),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fd.Name,
+				},
+				Spec: vcmv1.PoolSpec{
+					VSpherePlatformFailureDomainSpec: fd,
+					VCpus:                            int(cpu),
+					Memory:                           int(memory / 1024 / 1024 / 1024),
+					Storage:                          0,
+					Exclude:                          false,
+					IBMPoolSpec: vcmv1.IBMPoolSpec{
+						Pod:        *vcLocation.PodName,
+						Datacenter: *vcLocation.DatacenterName,
+					},
+				},
+			}
+
+			assets = append(assets, Asset{
+				Asset:    pool,
+				FileName: fmt.Sprintf("pool-%s.yaml", pool.Name),
+			})
+		}
+
+		envs.FailureDomains = append(envs.FailureDomains, *failureDomains...)
 
 		if networkVlans == nil {
 			if vcLocation != nil && vcLocation.PodName != nil {
@@ -202,27 +231,64 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName s
 			} else {
 				log.Printf("WARNING: unable to find physcial location of vCenter %s using IP address %s", k, vcIP[0].String())
 			}
-
 			continue
 		}
 
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
-			if _, ok := portGroupSubnetsMap[vlanNumber]; ok {
+			if pg, ok := portGroupSubnetsMap[vlanNumber]; ok {
 
-				pg := PortGroupSubnet{
-					VlanId:  vlanNumber,
-					Name:    portGroupSubnetsMap[vlanNumber].Name,
-					Subnets: nv.Subnets,
-					//Server:         k,
-					PodName:        vcLocation.PodName,
-					DatacenterName: vcLocation.DatacenterName,
+				if len(nv.Subnets) > 1 {
+					log.Print("WARNING: the length of the vlan subnet is greater then one, using only the first entry")
 				}
 
-				envs.PortGroupSubnets = append(envs.PortGroupSubnets, pg)
+				subnet := nv.Subnets[0]
+
+				ipAddressesAsString := make([]string, 0, len(subnet.IpAddresses))
+				for _, ipAddress := range subnet.IpAddresses {
+					ipAddressesAsString = append(ipAddressesAsString, *ipAddress.IpAddress)
+				}
+
+				ipv6Subnet := iplib.Net6FromStr(fmt.Sprintf("%s:%d::1/64", ipv6SubnetString, *nv.VlanNumber))
+
+				cidrV6, _ := ipv6Subnet.Mask().Size()
+
+				network := vcmv1.Network{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Network",
+						APIVersion: fmt.Sprintf("%s/v1", vcmv1.APIGroupName),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("%s-%s-%s", pg.Name, *nv.Datacenter.Name, *nv.PodName),
+					},
+					Spec: vcmv1.NetworkSpec{
+						PortGroupName:      pg.Name,
+						VlanId:             string(rune(*nv.VlanNumber)),
+						PodName:            nv.PodName,
+						DatacenterName:     nv.Datacenter.Name,
+						Cidr:               subnet.Cidr,
+						Gateway:            subnet.Gateway,
+						IpAddressCount:     subnet.IpAddressCount,
+						Netmask:            subnet.Netmask,
+						SubnetType:         subnet.SubnetType,
+						MachineNetworkCidr: fmt.Sprintf("%s/%d", *subnet.NetworkIdentifier, *subnet.Cidr),
+						IpAddresses:        ipAddressesAsString,
+						CidrIPv6:           cidrV6,
+						GatewayIPv6:        ipv6Subnet.Enumerate(1, 2)[0].String(),
+						IpV6prefix:         ipv6Subnet.String(),
+						StartIPv6Address:   ipv6Subnet.Enumerate(1, 4)[0].String(),
+					},
+				}
+
+				assets = append(assets, Asset{
+					Asset:    network,
+					FileName: fmt.Sprintf("network-%s.yaml", network.Name),
+				})
+
+				envs.PortGroupSubnets = append(envs.PortGroupSubnets)
 			}
 		}
 	}
 
-	return &envs, nil
+	return &envs, assets, nil
 }
