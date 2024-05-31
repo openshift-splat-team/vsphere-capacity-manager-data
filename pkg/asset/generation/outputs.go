@@ -92,6 +92,9 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 	}
 
 	vcenterCredentials, err := parseVSphereCredentails(vCenterAuthFileName)
+	if err != nil {
+		return nil, err
+	}
 
 	for k, v := range vcenterCredentials {
 		_, err := vmeta.AddCredentials(k, v.Username, v.Password)
@@ -147,7 +150,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 		var networkVlans *[]datatypes.Network_Vlan
 		var vcLocation *ibmcloud.VCenterLocation
-		for account, _ := range ibmCredentails {
+		for account := range ibmCredentails {
 			vcLocation, err = imeta.FindVCenterPhyDC(account, vcIP)
 			if err != nil {
 				return nil, err
@@ -277,8 +280,6 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 					Asset:    network,
 					FileName: fmt.Sprintf("network-%s.yaml", network.Name),
 				})
-
-				envs.PortGroupSubnets = append(envs.PortGroupSubnets)
 			}
 		}
 	}
