@@ -65,11 +65,6 @@ capacity-manager:
 test:
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ./hack/test.sh	
 
-.PHONY: generate
-generate: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) paths=./... crd rbac:roleName=lease-perms output:crd:artifacts:config=config/crd/bases
-	go generate ./...
-	
 # Use podman to build the image.
 .PHONY: image
 image:

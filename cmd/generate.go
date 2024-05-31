@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -31,7 +30,7 @@ var generateCmd = &cobra.Command{
 			log.Fatalf("Manifest directory is not empty, please ensure %s is empty and run 'vcmd generate'", ManifestDir)
 		}
 
-		env, assets, err := generation.CreateVSphereEnvironmentsConfig(VCenterAuthFileName, IBMCloudAuthFileName, IPv6Subnet, PortGroupNameSubstring)
+		assets, err := generation.CreateVSphereEnvironmentsConfig(VCenterAuthFileName, IBMCloudAuthFileName, IPv6Subnet, PortGroupNameSubstring)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -44,21 +43,11 @@ var generateCmd = &cobra.Command{
 			}
 		}
 
-		b, err := json.MarshalIndent(env, "", "  ")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = os.WriteFile(OutputFileName, b, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
 	},
 }
 
 var VCenterAuthFileName string
 var IBMCloudAuthFileName string
-var OutputFileName string
 var ManifestDir string
 var IPv6Subnet string
 var PortGroupNameSubstring string
@@ -66,7 +55,6 @@ var PortGroupNameSubstring string
 func init() {
 	generateCmd.Flags().StringVarP(&VCenterAuthFileName, "vcenter", "v", "vcenter.json", "vCenter JSON Auth File")
 	generateCmd.Flags().StringVarP(&IBMCloudAuthFileName, "ibmcloud", "i", "ibmcloud.json", "vCenter JSON Auth File")
-	generateCmd.Flags().StringVarP(&OutputFileName, "output", "o", "output.json", "Output file")
 	generateCmd.Flags().StringVarP(&ManifestDir, "manifests", "m", "./manifests", "Manifests output path")
 	generateCmd.Flags().StringVarP(&IPv6Subnet, "subnet6", "6", "fd65:a1a8:60ad", "IPv6 Subnet defaults to fd65:a1a8:60ad")
 	generateCmd.Flags().StringVarP(&PortGroupNameSubstring, "pg", "p", "ci-vlan-", "Port Group substring defaults to ci-vlan-")
