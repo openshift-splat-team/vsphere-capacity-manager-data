@@ -28,13 +28,6 @@ type PortGroupSubnet struct {
 	PodName        *string
 	DatacenterName *string
 	Subnets        []datatypes.Network_Subnet
-
-	// vcenter server
-	// TODO: we may not be able to do this association
-	// TODO: and maybe we don't even need it.
-	// TODO: problem: if I have two vcenters in the same datacenter and pod they most likely will have
-	// TODO: the same vlans attached
-	//Server string
 }
 
 type FailureDomainResourceCapacity struct {
@@ -79,7 +72,7 @@ func parseVSphereCredentails(vcenterAuthFileName string) (map[string]vsphere.VCe
 	return vCenterCredentails, nil
 }
 
-func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, ipv6SubnetString, portGroupSubString string) (*VSphereEnvironmentsConfig, []Asset, error) {
+func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, ipv6SubnetString, portGroupSubString string) ([]Asset, error) {
 	var envs VSphereEnvironmentsConfig
 	var assets = make([]Asset, 0)
 
@@ -88,17 +81,20 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 	ibmCredentails, err := parseIBMCredentails(ibmCloudAuthFileName)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	for a, i := range ibmCredentails {
 		err := imeta.AddCredentials(a, i.Username, i.ApiToken)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
 	vcenterCredentials, err := parseVSphereCredentails(vCenterAuthFileName)
+	if err != nil {
+		return nil, err
+	}
 
 	for k, v := range vcenterCredentials {
 		_, err := vmeta.AddCredentials(k, v.Username, v.Password)
@@ -109,7 +105,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 		var dcPaths []string
 		datacenters, err := vmeta.GetDatacenters(k)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		for _, dc := range datacenters {
@@ -123,7 +119,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 		portGroups, err := vmeta.GetDistributedPortGroups(k, portGroupSubString)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		portGroupSubnetsMap := make(map[int32]PortGroupSubnet)
@@ -140,7 +136,7 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 		url, err := vmeta.GetHostnameUrlVpxd(k)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		if k != *url {
@@ -154,16 +150,16 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 		var networkVlans *[]datatypes.Network_Vlan
 		var vcLocation *ibmcloud.VCenterLocation
-		for account, _ := range ibmCredentails {
+		for account := range ibmCredentails {
 			vcLocation, err = imeta.FindVCenterPhyDC(account, vcIP)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
 			if vcLocation.DatacenterName != nil {
 				networkVlans, err = imeta.GetVlanSubnets(account, *vcLocation.DatacenterName, *vcLocation.PodName)
 				if err != nil {
-					return nil, nil, err
+					return nil, err
 				}
 				break
 			}
@@ -182,12 +178,12 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 		for _, fd := range *failureDomains {
 			cObj, err := vmeta.GetClusterByPath(fd.Server, fd.Topology.ComputeCluster)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
 			cpu, memory, err := vmeta.GetClusterCapacity(fd.Server, cObj)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
 			envs.FailureDomainsResourceCapacity = append(envs.FailureDomainsResourceCapacity, FailureDomainResourceCapacity{
@@ -284,11 +280,9 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 					Asset:    network,
 					FileName: fmt.Sprintf("network-%s.yaml", network.Name),
 				})
-
-				envs.PortGroupSubnets = append(envs.PortGroupSubnets)
 			}
 		}
 	}
 
-	return &envs, assets, nil
+	return assets, nil
 }

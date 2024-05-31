@@ -3,7 +3,6 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	"log"
 	"path"
 	"strings"
 	"time"
@@ -287,54 +286,55 @@ func (m *Metadata) GetFailureDomainsViaTag(server string) (*[]v1.VSpherePlatform
 	return &failureDomains, nil
 }
 
-func (m *Metadata) GetTopologyByTags(server string, objectID []mo.Reference) error {
-	var openshiftZoneTagCatId string
-	var openshiftRegionTagCatId string
+/*
+	func (m *Metadata) GetTopologyByTags(server string, objectID []mo.Reference) error {
+		var openshiftZoneTagCatId string
+		var openshiftRegionTagCatId string
 
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+		defer cancel()
 
-	sess, err := m.Session(ctx, server)
-	if err != nil {
-		return err
-	}
-
-	err = m.GetTagCategories(server)
-	if err != nil {
-		return err
-	}
-
-	attachedTags, err := sess.TagManager.GetAttachedTagsOnObjects(ctx, objectID)
-	if err != nil {
-		return err
-	}
-
-	for _, tc := range m.VCenterContexts[server].TagCategories {
-		if tc.Name == openshiftZoneTagCatName {
-			openshiftZoneTagCatId = tc.ID
+		sess, err := m.Session(ctx, server)
+		if err != nil {
+			return err
 		}
-		if tc.Name == openshiftRegionTagCatName {
-			openshiftRegionTagCatId = tc.ID
+
+		err = m.GetTagCategories(server)
+		if err != nil {
+			return err
 		}
-	}
 
-	for _, atag := range attachedTags {
-		for _, tag := range atag.Tags {
-			if tag.CategoryID == openshiftZoneTagCatId {
+		attachedTags, err := sess.TagManager.GetAttachedTagsOnObjects(ctx, objectID)
+		if err != nil {
+			return err
+		}
 
-				log.Print(tag.Name)
-				log.Print(atag.ObjectID)
-
+		for _, tc := range m.VCenterContexts[server].TagCategories {
+			if tc.Name == openshiftZoneTagCatName {
+				openshiftZoneTagCatId = tc.ID
 			}
-			if tag.CategoryID == openshiftRegionTagCatId {
-
+			if tc.Name == openshiftRegionTagCatName {
+				openshiftRegionTagCatId = tc.ID
 			}
 		}
+
+		for _, atag := range attachedTags {
+			for _, tag := range atag.Tags {
+				if tag.CategoryID == openshiftZoneTagCatId {
+
+					log.Print(tag.Name)
+					log.Print(atag.ObjectID)
+
+				}
+				if tag.CategoryID == openshiftRegionTagCatId {
+
+				}
+			}
+		}
+
+		return nil
 	}
-
-	return nil
-}
-
+*/
 func (m *Metadata) GetHostnameUrlVpxd(server string) (*string, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
