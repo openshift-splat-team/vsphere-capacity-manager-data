@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/c-robinson/iplib/v2"
 	"github.com/softlayer/softlayer-go/datatypes"
@@ -16,6 +18,11 @@ import (
 	"github.com/openshift-splat-team/vsphere-capacity-manager-data/pkg/vsphere"
 	vcmv1 "github.com/openshift-splat-team/vsphere-capacity-manager/pkg/apis/vspherecapacitymanager.splat.io/v1"
 	configv1 "github.com/openshift/api/config/v1"
+)
+
+// TODO: Eventually fix
+const (
+	currentRunningGroupNameAndVersion = "vspherecapacitymanager.splat.io/v1"
 )
 
 type PortGroupSubnet struct {
@@ -195,21 +202,22 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 			pool := vcmv1.Pool{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Pool",
-					APIVersion: fmt.Sprintf("%s/v1", vcmv1.APIGroupName),
+					APIVersion: currentRunningGroupNameAndVersion,
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fd.Name,
+					Name: strings.ToLower(fd.Name),
 				},
 				Spec: vcmv1.PoolSpec{
 					VSpherePlatformFailureDomainSpec: fd,
 					VCpus:                            int(cpu),
 					Memory:                           int(memory / 1024 / 1024 / 1024),
 					Storage:                          0,
-					Exclude:                          false,
+					Exclude:                          true,
 					IBMPoolSpec: vcmv1.IBMPoolSpec{
 						Pod:        *vcLocation.PodName,
 						Datacenter: *vcLocation.DatacenterName,
 					},
+					NoSchedule: true,
 				},
 			}
 
@@ -232,8 +240,32 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 
 		for _, nv := range *networkVlans {
 			vlanNumber := int32(*nv.VlanNumber)
-			if pg, ok := portGroupSubnetsMap[vlanNumber]; ok {
 
+			additionalSubnets := make([]datatypes.Network_Subnet, 0)
+			for account := range ibmCredentails {
+				taggedSubnets, err := imeta.GetSubnetsByTag(account, *vcLocation.DatacenterName, *vcLocation.PodName, fmt.Sprintf("pri_%d", vlanNumber))
+				if err != nil {
+					return nil, err
+				}
+
+				additionalSubnets = append(additionalSubnets, *taggedSubnets...)
+			}
+
+			if len(additionalSubnets) > 1 {
+				log.Print("WARNING: the length of the additional subnets is greater then one")
+			}
+
+			var ipv6NetworkSubnet *datatypes.Network_Subnet
+
+			// we only support a single ipv6 network subnet
+			for _, subnet := range additionalSubnets {
+				if *subnet.Version == 6 {
+					ipv6NetworkSubnet = &subnet
+					break
+				}
+			}
+
+			if pg, ok := portGroupSubnetsMap[vlanNumber]; ok {
 				if len(nv.Subnets) > 1 {
 					log.Print("WARNING: the length of the vlan subnet is greater then one, using only the first entry")
 				}
@@ -246,33 +278,37 @@ func CreateVSphereEnvironmentsConfig(vCenterAuthFileName, ibmCloudAuthFileName, 
 				}
 
 				ipv6Subnet := iplib.Net6FromStr(fmt.Sprintf("%s:%d::1/64", ipv6SubnetString, *nv.VlanNumber))
+				if ipv6NetworkSubnet != nil {
+					ipv6Subnet = iplib.Net6FromStr(fmt.Sprintf("%s/%d", *ipv6NetworkSubnet.Gateway, *ipv6NetworkSubnet.Cidr))
+				}
 
 				cidrV6, _ := ipv6Subnet.Mask().Size()
 
 				network := vcmv1.Network{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "Network",
-						APIVersion: fmt.Sprintf("%s/v1", vcmv1.APIGroupName),
+						APIVersion: currentRunningGroupNameAndVersion,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("%s-%s-%s", pg.Name, *nv.Datacenter.Name, *nv.PodName),
 					},
 					Spec: vcmv1.NetworkSpec{
-						PortGroupName:      pg.Name,
-						VlanId:             string(rune(*nv.VlanNumber)),
-						PodName:            nv.PodName,
-						DatacenterName:     nv.Datacenter.Name,
-						Cidr:               subnet.Cidr,
-						Gateway:            subnet.Gateway,
-						IpAddressCount:     subnet.IpAddressCount,
-						Netmask:            subnet.Netmask,
-						SubnetType:         subnet.SubnetType,
-						MachineNetworkCidr: fmt.Sprintf("%s/%d", *subnet.NetworkIdentifier, *subnet.Cidr),
-						IpAddresses:        ipAddressesAsString,
-						CidrIPv6:           cidrV6,
-						GatewayIPv6:        ipv6Subnet.Enumerate(1, 2)[0].String(),
-						IpV6prefix:         ipv6Subnet.String(),
-						StartIPv6Address:   ipv6Subnet.Enumerate(1, 4)[0].String(),
+						PortGroupName:         pg.Name,
+						VlanId:                strconv.Itoa(*nv.VlanNumber),
+						PodName:               nv.PodName,
+						DatacenterName:        nv.Datacenter.Name,
+						Cidr:                  subnet.Cidr,
+						Gateway:               subnet.Gateway,
+						IpAddressCount:        subnet.IpAddressCount,
+						Netmask:               subnet.Netmask,
+						SubnetType:            subnet.SubnetType,
+						MachineNetworkCidr:    fmt.Sprintf("%s/%d", *subnet.NetworkIdentifier, *subnet.Cidr),
+						IpAddresses:           ipAddressesAsString,
+						CidrIPv6:              cidrV6,
+						GatewayIPv6:           ipv6Subnet.Enumerate(1, 2)[0].String(),
+						IpV6prefix:            ipv6Subnet.String(),
+						StartIPv6Address:      ipv6Subnet.Enumerate(1, 4)[0].String(),
+						PrimaryRouterHostname: *nv.PrimaryRouter.Hostname,
 					},
 				}
 
