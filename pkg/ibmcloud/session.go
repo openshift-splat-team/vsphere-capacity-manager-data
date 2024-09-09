@@ -19,6 +19,7 @@ type SoftlayerSession struct {
 	AccountSession services.Account
 
 	NetworkVlansCache *[]datatypes.Network_Vlan
+	SubnetsCache      *[]datatypes.Network_Subnet
 }
 
 type Metadata struct {

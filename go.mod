@@ -8,7 +8,7 @@ replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.7.0
 
 require (
 	github.com/c-robinson/iplib/v2 v2.0.5
-	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240529212609-11119e016d95
+	github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240820152614-6bad54a3d5c8
 	github.com/openshift/api v0.0.0-20240502183942-42506f3fcd01
 	github.com/softlayer/softlayer-go v1.1.3
 	github.com/spf13/cobra v1.8.0

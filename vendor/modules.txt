@@ -102,7 +102,7 @@ github.com/modern-go/reflect2
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240529212609-11119e016d95
+# github.com/openshift-splat-team/vsphere-capacity-manager v0.0.0-20240820152614-6bad54a3d5c8
 ## explicit; go 1.22.0
 github.com/openshift-splat-team/vsphere-capacity-manager/pkg/apis/vspherecapacitymanager.splat.io/v1
 # github.com/openshift/api v0.0.0-20240502183942-42506f3fcd01
